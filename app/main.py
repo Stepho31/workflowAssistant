@@ -8,11 +8,11 @@ from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
-from .ai import analyze_text
-from .database import Base, engine, get_db
-from .integrations import send_to_zapier
-from .models import WorkflowItem
-from .schemas import WorkflowCreate
+from ai import analyze_text
+from database import Base, engine, get_db
+from integrations import send_to_zapier
+from models import WorkflowItem
+from schemas import WorkflowCreate
 
 load_dotenv()
 Base.metadata.create_all(bind=engine)
@@ -97,10 +97,24 @@ async def inbound_webhook(request: Request, db: Session = Depends(get_db)):
         payload = await request.json()
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid JSON body: {exc}")
+    source = payload.get("source", "webhook")
 
-    title = payload.get("title") or payload.get("subject") or "Untitled webhook item"
-    raw_text = payload.get("raw_text") or payload.get("body") or json.dumps(payload, indent=2)
-    source = payload.get("source") or "webhook"
+    title = (
+        payload.get("title")
+        or payload.get("subject")
+        or payload.get("meeting_title")
+        or payload.get("event_name")
+        or "Untitled item"
+    )
+
+    raw_text = (
+        payload.get("raw_text")
+        or payload.get("body")
+        or payload.get("text")
+        or payload.get("message")
+        or payload.get("transcript")
+        or json.dumps(payload, indent=2)
+    )
 
     item = WorkflowItem(title=title, raw_text=raw_text, source=source, status="new")
     db.add(item)
@@ -130,15 +144,19 @@ def push_item_to_zapier(item_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Item not found")
 
     payload = {
-        "id": item.id,
-        "title": item.title,
-        "source": item.source,
-        "raw_text": item.raw_text,
-        "summary": item.summary,
-        "action_items": item.action_items,
-        "status": item.status,
-        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "event": "workflow_item_created",
+        "item": {
+            "id": item.id,
+            "title": item.title,
+            "source": item.source,
+            "raw_text": item.raw_text,
+            "summary": item.summary,
+            "action_items": item.action_items,
+            "status": item.status,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+        }
     }
+
     success, message = send_to_zapier(payload)
     if not success:
         raise HTTPException(status_code=400, detail=message)
