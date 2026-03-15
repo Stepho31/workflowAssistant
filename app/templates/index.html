@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workflow Assistant MVP</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+  <div class="container">
+
+    <header>
+      <h1>Workflow Assistant MVP</h1>
+      <p>Turn messy notes, emails, and meeting recaps into summaries, drafts, and action items.</p>
+
+      <div class="badges">
+        <span class="badge {{ 'on' if openai_enabled else 'off' }}">
+          OpenAI {{ 'enabled' if openai_enabled else 'disabled' }}
+        </span>
+
+        <span class="badge {{ 'on' if zapier_enabled else 'off' }}">
+          Zapier {{ 'enabled' if zapier_enabled else 'disabled' }}
+        </span>
+      </div>
+    </header>
+
+
+    <!-- CREATE ITEM -->
+    <section class="card">
+      <h2>Create workflow item</h2>
+
+      <form method="post" action="/items">
+
+        <label>Title</label>
+        <input type="text" name="title" placeholder="Client call recap" required />
+
+        <label>Source</label>
+        <input type="text" name="source" value="manual" />
+
+        <label>Raw text</label>
+        <textarea
+          name="raw_text"
+          rows="10"
+          placeholder="Paste messy notes, email body, or task dump here..."
+          required
+        ></textarea>
+
+        <label class="checkbox">
+          <input type="checkbox" name="run_ai" value="true" checked />
+          Run AI analysis
+        </label>
+
+        <button type="submit">Save item</button>
+
+      </form>
+    </section>
+
+
+
+    <!-- RECENT ITEMS -->
+    <section>
+      <h2>Recent items</h2>
+
+      {% for item in items %}
+
+      <article class="card item-card">
+
+        <div class="row between">
+
+          <div>
+            <h3>{{ item.title }}</h3>
+            <p class="meta">
+              #{{ item.id }} · {{ item.source }} · {{ item.status }}
+            </p>
+          </div>
+
+          <button
+            class="secondary"
+            onclick="sendToZapier({{ item.id }})"
+          >
+            Send to Zapier
+          </button>
+
+        </div>
+
+
+
+        <div class="grid">
+
+          <!-- SOURCE PREVIEW -->
+          <div>
+            <h4>Source Content</h4>
+
+            <p class="preview">
+              {{ item.raw_text[:300] }}
+              {% if item.raw_text|length > 300 %}...{% endif %}
+            </p>
+
+          </div>
+
+
+
+          <!-- AI RESULTS -->
+          <div>
+
+            <h4>Summary</h4>
+            <p class="summary">
+              {{ item.summary or 'No summary yet.' }}
+            </p>
+
+
+
+            <h4>Action Items</h4>
+
+            {% if item.action_items %}
+            <ul class="actions">
+
+              {% for action in item.action_items.split('\n') %}
+                {% if action.strip() %}
+                  <li>{{ action }}</li>
+                {% endif %}
+              {% endfor %}
+
+            </ul>
+
+            {% else %}
+              <p>No action items yet.</p>
+            {% endif %}
+
+
+
+            <!-- DRAFT MESSAGE -->
+            <h4>Draft Message</h4>
+
+            <textarea rows="6" readonly>
+{{ item.draft_message or 'No draft generated yet.' }}
+            </textarea>
+
+
+
+            <div class="row">
+
+              <button onclick="approveDraft({{ item.id }})">
+                Approve
+              </button>
+
+              <button
+                class="secondary"
+                onclick="rejectDraft({{ item.id }})"
+              >
+                Decline
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </article>
+
+      {% else %}
+
+      <div class="card empty">
+        No items yet. Create one above.
+      </div>
+
+      {% endfor %}
+
+    </section>
+
+  </div>
+
+
+
+<script>
+
+async function sendToZapier(itemId) {
+
+  const res = await fetch(`/items/${itemId}/send-to-zapier`, {
+    method: 'POST'
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || 'Failed to send to Zapier');
+    return;
+  }
+
+  alert(data.message || 'Sent to Zapier');
+
+}
+
+
+
+async function approveDraft(itemId) {
+
+  const res = await fetch(`/items/${itemId}/approve`, {
+    method: "POST"
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || 'Failed to approve');
+    return;
+  }
+
+  alert(data.message || "Draft approved and sent");
+
+}
+
+
+
+async function rejectDraft(itemId) {
+
+  const res = await fetch(`/items/${itemId}/reject`, {
+    method: "POST"
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.detail || 'Failed to reject');
+    return;
+  }
+
+  alert(data.message || "Draft declined");
+
+}
+
+</script>
+
+</body>
+</html>
