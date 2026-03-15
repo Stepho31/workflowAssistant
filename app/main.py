@@ -8,11 +8,11 @@ from fastapi.templating import Jinja2Templates
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
-from ai import analyze_text
-from database import Base, engine, get_db
-from integrations import send_to_zapier
-from models import WorkflowItem
-from schemas import WorkflowCreate
+from .ai import analyze_text
+from .database import Base, engine, get_db
+from .integrations import send_to_zapier
+from .models import WorkflowItem
+from .schemas import WorkflowCreate
 
 load_dotenv()
 Base.metadata.create_all(bind=engine)
